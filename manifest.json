@@ -1,0 +1,28 @@
+{
+  "name": "BABYMATCH — אפליקציה למציאת בייביסיטר",
+  "short_name": "BABYMATCH",
+  "description": "אפליקציה למציאת בייביסיטר להורים לפי סינון — יובל סבג ונועם אלוני",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF7F2",
+  "theme_color": "#6C5CE7",
+  "categories": ["lifestyle", "social"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ]
+}

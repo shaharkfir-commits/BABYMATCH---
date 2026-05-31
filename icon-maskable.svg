@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BABYMATCH">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#6C5CE7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)"/>
+  <g transform="translate(102 102) scale(0.605)">
+    <path d="M256 408 C228 380 116 308 116 218 C116 162 160 122 210 122 C234 122 256 138 256 162 C256 138 278 122 302 122 C352 122 396 162 396 218 C396 308 284 380 256 408 Z"
+          fill="#FFF7F2"/>
+    <circle cx="346" cy="170" r="38" fill="#FF8FA3"/>
+  </g>
+</svg>

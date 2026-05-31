@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#6C5CE7" />
+  <meta name="description" content="BABYMATCH — אפליקציה למציאת בייביסיטר להורים לפי סינון. פרויקט חשיבה עיצובית של יובל סבג ונועם אלוני." />
+  <title>BABYMATCH — אפליקציה למציאת בייביסיטר | יובל סבג & נועם אלוני</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="BABYMATCH" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="phone-frame">
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">💜</span>
+        <span class="brand-name">BABYMATCH</span>
+      </div>
+      <div class="role-switch" role="tablist" aria-label="החלפת תפקיד">
+        <button class="role-seg" role="tab" data-role="parent">הורה</button>
+        <button class="role-seg" role="tab" data-role="sitter">בייביסיטר</button>
+      </div>
+    </header>
+
+    <main id="app" class="app"></main>
+
+    <nav class="bottom-nav" id="bottomNav" aria-label="ניווט תחתון"></nav>
+
+    <footer class="demo-footer">
+      <button class="link-btn" id="aboutBtn">אודות</button>
+      <span class="footer-sep">·</span>
+      <button class="link-btn" id="resetDemo">איפוס דמו</button>
+      <div class="footer-credit">
+        פרויקט חשיבה עיצובית · <strong>יובל סבג</strong> ו<strong>נועם אלוני</strong> · המכללה האקדמית רמת גן
+      </div>
+    </footer>
+  </div>
+
+  <div id="modalRoot" class="modal-root" aria-hidden="true"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
