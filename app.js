@@ -86,9 +86,23 @@
   const isAvailable = (sitter, dayId, blockId) =>
     Array.isArray(sitter.availability?.[dayId]) && sitter.availability[dayId].includes(blockId);
 
-  // Hour helpers — booking is hour-based; the sitter's availability is block-based.
-  const fmtH = (h) => `${String(h).padStart(2, '0')}:00`;
+  // Hour helpers — booking supports any quarter-hour; sitter availability is block-based.
+  // Hours are decimal: 14.5 === 14:30, 16.75 === 16:45.
+  const fmtH = (h) => {
+    if (!Number.isFinite(h)) return '—';
+    const hh = Math.floor(h);
+    const mm = Math.round((h - hh) * 60);
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  };
+  const parseH = (s) => {
+    if (!s) return NaN;
+    const [hh, mm] = String(s).split(':').map(Number);
+    if (!Number.isFinite(hh)) return NaN;
+    return hh + (Number.isFinite(mm) ? mm : 0) / 60;
+  };
   const fmtRange = (s, e) => `${fmtH(s)}–${fmtH(e)}`;
+  const fmtHours = (h) =>
+    Number.isInteger(h) ? `${h} שעות` : `${h.toFixed(2).replace(/\.?0+$/, '')} שעות`;
 
   // Merge a day's blocks into contiguous hour ranges (e.g., afternoon+evening → [15,22]).
   function availableHourRanges(sitter, dayId) {
@@ -541,18 +555,10 @@
       return;
     }
 
-    // Selectable hours: 7..24 (24 = midnight end-of-day).
-    const HOURS = Array.from({ length: 18 }, (_, i) => 7 + i);
-
     let selDay = days[0];
     // Default to the first available window, capped at 3 hours or end-of-window.
     let startH = selDay.ranges[0][0];
     let endH = Math.min(selDay.ranges[0][1], startH + 3);
-
-    const hourOpts = (selected, filter = () => true) =>
-      HOURS.filter(filter)
-        .map((h) => `<option value="${h}" ${h === selected ? 'selected' : ''}>${fmtH(h)}</option>`)
-        .join('');
 
     const content = `
       <div class="field">
@@ -563,21 +569,19 @@
       </div>
 
       <div class="field">
-        <label>שעות</label>
+        <label>שעות — הקלדה חופשית</label>
         <div class="row-2 hours-row">
-          <div>
-            <span class="muted small">מ-</span>
-            <select id="startH">${hourOpts(startH, (h) => h < 24)}</select>
-          </div>
-          <div>
-            <span class="muted small">עד</span>
-            <select id="endH">${hourOpts(endH, (h) => h > startH)}</select>
-          </div>
+          <label class="hour-input">
+            <span class="muted small">משעה</span>
+            <input type="time" id="startH" value="${fmtH(startH)}" step="900" min="07:00" max="23:45" />
+          </label>
+          <label class="hour-input">
+            <span class="muted small">עד שעה</span>
+            <input type="time" id="endH" value="${fmtH(endH)}" step="900" min="07:15" max="23:59" />
+          </label>
         </div>
-        <div class="muted small mt-8">
-          <strong>בחירה מהירה:</strong>
-          <div class="chip-row mt-8" id="blockQuickPick"></div>
-        </div>
+        <div class="or-divider"><span>או בחירה מהירה</span></div>
+        <div class="chip-row" id="blockQuickPick"></div>
         <div class="avail-hint" id="availHint"></div>
       </div>
 
@@ -598,8 +602,8 @@
       </div>`;
 
     openModal('הזמנה אצל ' + sitter.name, content, (body) => {
-      const startSel = $('#startH', body);
-      const endSel   = $('#endH', body);
+      const startInp = $('#startH', body);
+      const endInp   = $('#endH', body);
       const dateSel  = $('#dateSel', body);
       const totalEl  = $('#totalCalc', body);
       const errEl    = $('#bookError', body);
@@ -607,15 +611,9 @@
       const confirmBtn = $('#confirmBook', body);
       const quickPick = $('#blockQuickPick', body);
 
-      function refreshHourOptions() {
-        // start: any hour 7..23
-        startSel.innerHTML = hourOpts(startH, (h) => h < 24);
-        // end: must be > start
-        endSel.innerHTML = hourOpts(endH, (h) => h > startH);
-        if (endH <= startH) {
-          endH = startH + 1;
-          endSel.value = String(endH);
-        }
+      function syncInputs() {
+        startInp.value = fmtH(startH);
+        endInp.value = fmtH(endH);
       }
 
       function refreshQuickPick() {
@@ -623,14 +621,14 @@
           .map((bId) => {
             const b = blockById(bId);
             const active = b.start === startH && b.end === endH ? 'active' : '';
-            return `<button class="chip ${active}" data-s="${b.start}" data-e="${b.end}">${b.label}<br><span class="small">${b.range}</span></button>`;
+            return `<button type="button" class="chip ${active}" data-s="${b.start}" data-e="${b.end}">${b.label}<br><span class="small">${b.range}</span></button>`;
           })
           .join('');
         $$('.chip', quickPick).forEach((c) => {
           c.onclick = () => {
             startH = Number(c.dataset.s);
             endH = Number(c.dataset.e);
-            refreshHourOptions();
+            syncInputs();
             refreshAll();
           };
         });
@@ -638,21 +636,20 @@
 
       function refreshHint() {
         const windowsTxt = selDay.ranges.map(([s, e]) => fmtRange(s, e)).join(' · ');
-        hintEl.innerHTML = `<span class="muted small">זמינות הבייביסיטר ב${formatDateHe(selDay.iso).replace('· ', '')}:</span> <strong>${windowsTxt}</strong>`;
+        hintEl.innerHTML = `<span class="muted small">הבייביסיטר פנוי/ה ב${formatDateHe(selDay.iso).replace('· ', '')}:</span> <strong>${windowsTxt}</strong>`;
       }
 
       function refreshTotal() {
         const hours = endH - startH;
-        const valid = hours > 0 && rangeFits(startH, endH, selDay.ranges);
         if (hours <= 0) {
           totalEl.textContent = '—';
           showError('שעת הסיום חייבת להיות אחרי שעת ההתחלה.');
           return;
         }
-        totalEl.textContent = `₪${hours * sitter.hourlyRate} (${hours} שעות)`;
-        if (!valid) {
+        totalEl.textContent = `₪${Math.round(hours * sitter.hourlyRate)} (${fmtHours(hours)})`;
+        if (!rangeFits(startH, endH, selDay.ranges)) {
           const windows = selDay.ranges.map(([s, e]) => fmtRange(s, e)).join(' או ');
-          showError(`הטווח ${fmtRange(startH, endH)} מחוץ לזמינות. ${sitter.name} פנוי/ה ב-${windows}.`);
+          showError(`הטווח ${fmtRange(startH, endH)} מחוץ לזמינות. ${sitter.name} פנוי/ה רק ב-${windows}.`);
         } else {
           hideError();
         }
@@ -676,27 +673,34 @@
 
       dateSel.onchange = (e) => {
         selDay = days.find((d) => d.iso === e.target.value);
-        // Snap start/end into the first available window of the new day if currently out of range.
+        // If current selection no longer fits, snap into the first available window.
         if (!rangeFits(startH, endH, selDay.ranges)) {
           const [rs, re] = selDay.ranges[0];
           startH = rs;
           endH = Math.min(re, rs + 3);
+          syncInputs();
         }
-        refreshHourOptions();
         refreshAll();
       };
 
-      startSel.onchange = () => {
-        startH = Number(startSel.value);
-        if (endH <= startH) endH = Math.min(24, startH + 1);
-        refreshHourOptions();
+      // Update on every change/blur/keystroke — supports both native picker and direct typing.
+      const onStartChange = () => {
+        const v = parseH(startInp.value);
+        if (!Number.isFinite(v)) return;
+        startH = v;
+        if (endH <= startH) { endH = Math.min(24, startH + 1); syncInputs(); }
         refreshAll();
       };
-      endSel.onchange = () => {
-        endH = Number(endSel.value);
-        refreshTotal();
-        refreshQuickPick();
+      const onEndChange = () => {
+        const v = parseH(endInp.value);
+        if (!Number.isFinite(v)) return;
+        endH = v;
+        refreshAll();
       };
+      startInp.addEventListener('change', onStartChange);
+      startInp.addEventListener('input',  onStartChange);
+      endInp.addEventListener('change', onEndChange);
+      endInp.addEventListener('input',  onEndChange);
 
       $('#cancelBook', body).onclick = closeModal;
       confirmBtn.onclick = () => {
@@ -760,7 +764,7 @@
       : r.status === 'accepted' ? '<span class="badge success">אושר</span>'
       : '<span class="badge danger">נדחה</span>';
     const hours = r.endH - r.startH;
-    const total = hours * (s.hourlyRate || 0);
+    const total = Math.round(hours * (s.hourlyRate || 0));
     return `
       <div class="card booking-card-wrap">
         <div class="booking-card">
@@ -768,7 +772,7 @@
           <div style="flex:1;min-width:0;">
             <div class="when">${esc(s.name)}</div>
             <div class="sub">${formatDateHe(r.dateISO)} · ${fmtRange(r.startH, r.endH)}</div>
-            <div class="sub">${statusBadge} · ₪${total} (${hours} שעות)</div>
+            <div class="sub">${statusBadge} · ₪${total} (${fmtHours(hours)})</div>
           </div>
         </div>
         <div class="actions">
@@ -959,7 +963,7 @@
   function sitterReqCard(r, parents, me) {
     const p = parents.find((x) => x.id === r.parentId) || { name: 'הורה', color: '#999', childrenAges: [], neighborhood: '' };
     const hours = r.endH - r.startH;
-    const total = hours * me.hourlyRate;
+    const total = Math.round(hours * me.hourlyRate);
     const statusBadge =
       r.status === 'pending' ? '<span class="badge warning">ממתין לתשובה</span>'
       : r.status === 'accepted' ? '<span class="badge success">אושרה</span>'
@@ -976,7 +980,7 @@
         </div>
         <div class="mt-12">
           <div><strong>${formatDateHe(r.dateISO)}</strong> · ${fmtRange(r.startH, r.endH)}</div>
-          <div class="total">סה״כ ₪${total} (${hours} שעות)</div>
+          <div class="total">סה״כ ₪${total} (${fmtHours(hours)})</div>
         </div>
         ${r.note ? `<div class="note">📝 ${esc(r.note)}</div>` : ''}
         ${

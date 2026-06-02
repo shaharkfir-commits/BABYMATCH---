@@ -430,11 +430,34 @@ h4.section-title { font-size: 15px; margin: 14px 0 8px; color: var(--ink); }
 .about-list li { margin-bottom: 6px; }
 .about-list strong { color: var(--ink); }
 
-/* ===== Booking modal: hour inputs + availability hint + error ===== */
-.hours-row select {
-  width: 100%; padding: 10px 12px; border-radius: 10px;
-  border: 1px solid var(--line); background: #fff; color: var(--ink);
-  font-size: 16px; font-weight: 600;
+/* ===== Booking modal: hour inputs + quick-pick + availability hint + error ===== */
+.hour-input {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--surface-2); border-radius: 12px; padding: 8px 12px;
+  border: 1px solid var(--line);
+}
+.hour-input input[type="time"] {
+  width: 100%;
+  border: 0; background: transparent; padding: 4px 0;
+  font-size: 20px; font-weight: 700; color: var(--primary);
+  font-family: inherit; direction: ltr; text-align: center;
+  -moz-appearance: textfield;
+}
+.hour-input input[type="time"]:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px; border-radius: 6px;
+}
+.hour-input input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(40%) sepia(80%) saturate(800%) hue-rotate(220deg);
+  cursor: pointer;
+}
+.or-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 14px 0 8px;
+  color: var(--muted); font-size: 12px; font-weight: 600;
+}
+.or-divider::before, .or-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--line);
 }
 .avail-hint {
   margin-top: 10px; padding: 8px 12px;
@@ -446,6 +469,7 @@ h4.section-title { font-size: 15px; margin: 14px 0 8px; color: var(--ink); }
   margin-top: 10px; padding: 10px 12px;
   background: var(--danger-soft); color: #991B1B;
   border-radius: 10px; font-size: 13px; line-height: 1.5;
+  font-weight: 600;
 }
 
 /* ===== Modal ===== */
