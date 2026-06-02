@@ -430,6 +430,24 @@ h4.section-title { font-size: 15px; margin: 14px 0 8px; color: var(--ink); }
 .about-list li { margin-bottom: 6px; }
 .about-list strong { color: var(--ink); }
 
+/* ===== Booking modal: hour inputs + availability hint + error ===== */
+.hours-row select {
+  width: 100%; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  font-size: 16px; font-weight: 600;
+}
+.avail-hint {
+  margin-top: 10px; padding: 8px 12px;
+  background: var(--primary-soft); border-radius: 10px;
+  font-size: 12px; line-height: 1.5;
+}
+.avail-hint strong { color: var(--primary); }
+.book-error {
+  margin-top: 10px; padding: 10px 12px;
+  background: var(--danger-soft); color: #991B1B;
+  border-radius: 10px; font-size: 13px; line-height: 1.5;
+}
+
 /* ===== Modal ===== */
 .modal-root {
   position: fixed; inset: 0; background: rgba(31,41,55,0.5);

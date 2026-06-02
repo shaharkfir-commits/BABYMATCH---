@@ -86,6 +86,29 @@
   const isAvailable = (sitter, dayId, blockId) =>
     Array.isArray(sitter.availability?.[dayId]) && sitter.availability[dayId].includes(blockId);
 
+  // Hour helpers — booking is hour-based; the sitter's availability is block-based.
+  const fmtH = (h) => `${String(h).padStart(2, '0')}:00`;
+  const fmtRange = (s, e) => `${fmtH(s)}–${fmtH(e)}`;
+
+  // Merge a day's blocks into contiguous hour ranges (e.g., afternoon+evening → [15,22]).
+  function availableHourRanges(sitter, dayId) {
+    const ids = sitter.availability?.[dayId] || [];
+    if (!ids.length) return [];
+    const blocks = ids
+      .map((id) => BLOCKS.find((b) => b.id === id))
+      .filter(Boolean)
+      .sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const b of blocks) {
+      const last = merged[merged.length - 1];
+      if (last && last[1] === b.start) last[1] = b.end;
+      else merged.push([b.start, b.end]);
+    }
+    return merged;
+  }
+  // Booking range [s,e] is valid only if a single availability window contains it fully.
+  const rangeFits = (s, e, ranges) => ranges.some(([rs, re]) => rs <= s && re >= e);
+
   function avatar(person, size) {
     const cls = size === 'lg' ? 'avatar lg' : 'avatar';
     return `<span class="${cls}" style="background:${esc(person.color || '#6C5CE7')}">${esc(initials(person.name))}</span>`;
@@ -505,17 +528,31 @@
       const d = new Date(); d.setDate(d.getDate() + i);
       const iso = d.toISOString().slice(0, 10);
       const dayId = DAYS[d.getDay()].id;
+      const ranges = availableHourRanges(sitter, dayId);
       const blocks = sitter.availability?.[dayId] || [];
-      if (blocks.length) days.push({ iso, dayId, blocks });
+      if (ranges.length) days.push({ iso, dayId, ranges, blocks });
     }
 
     if (!days.length) {
-      openModal('הזמנת בייביסיטר', `<p>${esc(sitter.name)} לא פנויה ב-14 הימים הקרובים. נסי בייביסיטר אחרת.</p>`);
+      openModal(
+        'הזמנת בייביסיטר',
+        `<p>${esc(sitter.name)} אינו פנוי ב-14 הימים הקרובים. כדאי לבחור בייביסיטר אחר.</p>`,
+      );
       return;
     }
 
+    // Selectable hours: 7..24 (24 = midnight end-of-day).
+    const HOURS = Array.from({ length: 18 }, (_, i) => 7 + i);
+
     let selDay = days[0];
-    let selBlock = selDay.blocks[0];
+    // Default to the first available window, capped at 3 hours or end-of-window.
+    let startH = selDay.ranges[0][0];
+    let endH = Math.min(selDay.ranges[0][1], startH + 3);
+
+    const hourOpts = (selected, filter = () => true) =>
+      HOURS.filter(filter)
+        .map((h) => `<option value="${h}" ${h === selected ? 'selected' : ''}>${fmtH(h)}</option>`)
+        .join('');
 
     const content = `
       <div class="field">
@@ -524,62 +561,154 @@
           ${days.map((d) => `<option value="${d.iso}">${formatDateHe(d.iso)}</option>`).join('')}
         </select>
       </div>
+
       <div class="field">
         <label>שעות</label>
-        <div class="chip-row" id="blockChoice"></div>
+        <div class="row-2 hours-row">
+          <div>
+            <span class="muted small">מ-</span>
+            <select id="startH">${hourOpts(startH, (h) => h < 24)}</select>
+          </div>
+          <div>
+            <span class="muted small">עד</span>
+            <select id="endH">${hourOpts(endH, (h) => h > startH)}</select>
+          </div>
+        </div>
+        <div class="muted small mt-8">
+          <strong>בחירה מהירה:</strong>
+          <div class="chip-row mt-8" id="blockQuickPick"></div>
+        </div>
+        <div class="avail-hint" id="availHint"></div>
       </div>
+
       <div class="field">
-        <label>הערה לבייביסיטר (אופציונלי)</label>
+        <label>הערה לבייביסיטר (לא חובה)</label>
         <textarea id="noteInput" placeholder="פרטים על הילדים, שעת השכבה, אלרגיות..."></textarea>
       </div>
+
       <div class="row-between">
         <span class="muted">סה״כ משוער:</span>
         <span id="totalCalc" class="price">—</span>
       </div>
+      <div id="bookError" class="book-error" hidden></div>
+
       <div class="btn-row mt-12">
         <button class="btn btn-ghost" id="cancelBook">ביטול</button>
         <button class="btn btn-primary" id="confirmBook">שליחת בקשה</button>
       </div>`;
 
-    openModal('הזמנת ' + sitter.name, content, (body) => {
-      function refreshBlocks() {
-        const sel = $('#blockChoice', body);
-        sel.innerHTML = selDay.blocks
-          .map(
-            (bId) => {
-              const b = blockById(bId);
-              return `<button class="chip ${bId === selBlock ? 'active' : ''}" data-block="${bId}">${b.label}<br><span class="small">${b.range}</span></button>`;
-            },
-          )
+    openModal('הזמנה אצל ' + sitter.name, content, (body) => {
+      const startSel = $('#startH', body);
+      const endSel   = $('#endH', body);
+      const dateSel  = $('#dateSel', body);
+      const totalEl  = $('#totalCalc', body);
+      const errEl    = $('#bookError', body);
+      const hintEl   = $('#availHint', body);
+      const confirmBtn = $('#confirmBook', body);
+      const quickPick = $('#blockQuickPick', body);
+
+      function refreshHourOptions() {
+        // start: any hour 7..23
+        startSel.innerHTML = hourOpts(startH, (h) => h < 24);
+        // end: must be > start
+        endSel.innerHTML = hourOpts(endH, (h) => h > startH);
+        if (endH <= startH) {
+          endH = startH + 1;
+          endSel.value = String(endH);
+        }
+      }
+
+      function refreshQuickPick() {
+        quickPick.innerHTML = selDay.blocks
+          .map((bId) => {
+            const b = blockById(bId);
+            const active = b.start === startH && b.end === endH ? 'active' : '';
+            return `<button class="chip ${active}" data-s="${b.start}" data-e="${b.end}">${b.label}<br><span class="small">${b.range}</span></button>`;
+          })
           .join('');
-        $$('.chip', sel).forEach((c) => {
+        $$('.chip', quickPick).forEach((c) => {
           c.onclick = () => {
-            selBlock = c.dataset.block;
-            refreshBlocks();
-            refreshTotal();
+            startH = Number(c.dataset.s);
+            endH = Number(c.dataset.e);
+            refreshHourOptions();
+            refreshAll();
           };
         });
       }
-      function refreshTotal() {
-        const b = blockById(selBlock);
-        const hours = b.end - b.start;
-        $('#totalCalc', body).textContent = `₪${hours * sitter.hourlyRate} (${hours} שעות)`;
+
+      function refreshHint() {
+        const windowsTxt = selDay.ranges.map(([s, e]) => fmtRange(s, e)).join(' · ');
+        hintEl.innerHTML = `<span class="muted small">זמינות הבייביסיטר ב${formatDateHe(selDay.iso).replace('· ', '')}:</span> <strong>${windowsTxt}</strong>`;
       }
-      $('#dateSel', body).onchange = (e) => {
-        selDay = days.find((d) => d.iso === e.target.value);
-        if (!selDay.blocks.includes(selBlock)) selBlock = selDay.blocks[0];
-        refreshBlocks();
+
+      function refreshTotal() {
+        const hours = endH - startH;
+        const valid = hours > 0 && rangeFits(startH, endH, selDay.ranges);
+        if (hours <= 0) {
+          totalEl.textContent = '—';
+          showError('שעת הסיום חייבת להיות אחרי שעת ההתחלה.');
+          return;
+        }
+        totalEl.textContent = `₪${hours * sitter.hourlyRate} (${hours} שעות)`;
+        if (!valid) {
+          const windows = selDay.ranges.map(([s, e]) => fmtRange(s, e)).join(' או ');
+          showError(`הטווח ${fmtRange(startH, endH)} מחוץ לזמינות. ${sitter.name} פנוי/ה ב-${windows}.`);
+        } else {
+          hideError();
+        }
+      }
+
+      function showError(msg) {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+        confirmBtn.disabled = true;
+      }
+      function hideError() {
+        errEl.hidden = true;
+        confirmBtn.disabled = false;
+      }
+
+      function refreshAll() {
+        refreshHint();
+        refreshQuickPick();
         refreshTotal();
+      }
+
+      dateSel.onchange = (e) => {
+        selDay = days.find((d) => d.iso === e.target.value);
+        // Snap start/end into the first available window of the new day if currently out of range.
+        if (!rangeFits(startH, endH, selDay.ranges)) {
+          const [rs, re] = selDay.ranges[0];
+          startH = rs;
+          endH = Math.min(re, rs + 3);
+        }
+        refreshHourOptions();
+        refreshAll();
       };
+
+      startSel.onchange = () => {
+        startH = Number(startSel.value);
+        if (endH <= startH) endH = Math.min(24, startH + 1);
+        refreshHourOptions();
+        refreshAll();
+      };
+      endSel.onchange = () => {
+        endH = Number(endSel.value);
+        refreshTotal();
+        refreshQuickPick();
+      };
+
       $('#cancelBook', body).onclick = closeModal;
-      $('#confirmBook', body).onclick = () => {
+      confirmBtn.onclick = () => {
+        if (!rangeFits(startH, endH, selDay.ranges) || endH <= startH) return;
         const note = $('#noteInput', body).value.trim();
         const req = {
           id: 'r_' + Date.now(),
           parentId: Store.user().parentId,
           sitterId,
           dateISO: selDay.iso,
-          blockId: selBlock,
+          startH,
+          endH,
           status: 'pending',
           note,
           createdAt: today(),
@@ -589,8 +718,8 @@
         toast('הבקשה נשלחה! 🎉');
         navigate('parent/bookings');
       };
-      refreshBlocks();
-      refreshTotal();
+
+      refreshAll();
     });
   }
 
@@ -626,12 +755,11 @@
 
   function parentBookingCard(r, sitters) {
     const s = sitters.find((x) => x.id === r.sitterId) || { name: 'לא ידוע', color: '#999' };
-    const b = blockById(r.blockId);
     const statusBadge =
       r.status === 'pending' ? '<span class="badge warning">ממתין לאישור</span>'
       : r.status === 'accepted' ? '<span class="badge success">אושר</span>'
       : '<span class="badge danger">נדחה</span>';
-    const hours = b.end - b.start;
+    const hours = r.endH - r.startH;
     const total = hours * (s.hourlyRate || 0);
     return `
       <div class="card booking-card-wrap">
@@ -639,8 +767,8 @@
           ${avatar(s)}
           <div style="flex:1;min-width:0;">
             <div class="when">${esc(s.name)}</div>
-            <div class="sub">${formatDateHe(r.dateISO)} · ${b.label} (${b.range})</div>
-            <div class="sub">${statusBadge} · ₪${total}</div>
+            <div class="sub">${formatDateHe(r.dateISO)} · ${fmtRange(r.startH, r.endH)}</div>
+            <div class="sub">${statusBadge} · ₪${total} (${hours} שעות)</div>
           </div>
         </div>
         <div class="actions">
@@ -830,8 +958,7 @@
 
   function sitterReqCard(r, parents, me) {
     const p = parents.find((x) => x.id === r.parentId) || { name: 'הורה', color: '#999', childrenAges: [], neighborhood: '' };
-    const b = blockById(r.blockId);
-    const hours = b.end - b.start;
+    const hours = r.endH - r.startH;
     const total = hours * me.hourlyRate;
     const statusBadge =
       r.status === 'pending' ? '<span class="badge warning">ממתין לתשובה</span>'
@@ -848,7 +975,7 @@
           ${statusBadge}
         </div>
         <div class="mt-12">
-          <div><strong>${formatDateHe(r.dateISO)}</strong> · ${b.label} (${b.range})</div>
+          <div><strong>${formatDateHe(r.dateISO)}</strong> · ${fmtRange(r.startH, r.endH)}</div>
           <div class="total">סה״כ ₪${total} (${hours} שעות)</div>
         </div>
         ${r.note ? `<div class="note">📝 ${esc(r.note)}</div>` : ''}

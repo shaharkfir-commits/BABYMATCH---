@@ -257,11 +257,11 @@ window.SEED = {
       return d.toISOString().slice(0, 10);
     };
     return [
-      { id: 'r1', parentId: 'p_dana',   sitterId: 's_maya', dateISO: addDays(2),  blockId: 'evening', status: 'pending',  note: 'ילד בן 2, הולך לישון ב-20:00.', createdAt: addDays(-1) },
-      { id: 'r2', parentId: 'p_noa',    sitterId: 's_maya', dateISO: addDays(5),  blockId: 'evening', status: 'pending',  note: '',                                createdAt: addDays(-2) },
-      { id: 'r3', parentId: 'p_orital', sitterId: 's_shira',dateISO: addDays(-7), blockId: 'evening', status: 'accepted', note: '',                                createdAt: addDays(-14) },
-      { id: 'r4', parentId: 'p_orital', sitterId: 's_noam', dateISO: addDays(-3), blockId: 'evening', status: 'accepted', note: '',                                createdAt: addDays(-10) },
-      { id: 'r5', parentId: 'p_orital', sitterId: 's_tal',  dateISO: addDays(3),  blockId: 'evening', status: 'pending',  note: 'ערב יום הולדת לחבר.',              createdAt: addDays(0)  },
+      { id: 'r1', parentId: 'p_dana',   sitterId: 's_maya', dateISO: addDays(2),  startH: 18, endH: 22, status: 'pending',  note: 'ילד בן 2, הולך לישון ב-20:00.', createdAt: addDays(-1) },
+      { id: 'r2', parentId: 'p_noa',    sitterId: 's_maya', dateISO: addDays(5),  startH: 19, endH: 22, status: 'pending',  note: '',                                createdAt: addDays(-2) },
+      { id: 'r3', parentId: 'p_orital', sitterId: 's_shira',dateISO: addDays(-7), startH: 18, endH: 22, status: 'accepted', note: '',                                createdAt: addDays(-14) },
+      { id: 'r4', parentId: 'p_orital', sitterId: 's_noam', dateISO: addDays(-3), startH: 18, endH: 22, status: 'accepted', note: '',                                createdAt: addDays(-10) },
+      { id: 'r5', parentId: 'p_orital', sitterId: 's_tal',  dateISO: addDays(3),  startH: 18, endH: 21, status: 'pending',  note: 'ערב יום הולדת לחבר.',              createdAt: addDays(0)  },
     ];
   },
 };
