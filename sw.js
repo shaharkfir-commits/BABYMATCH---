@@ -1,6 +1,6 @@
 // BABYMATCH service worker — cache-first for the app shell, so the PWA loads instantly and works offline.
 // Course project · יובל סבג ונועם אלוני.
-const CACHE = 'babymatch-v5';
+const CACHE = 'babymatch-v6';
 const ASSETS = [
   './',
   './index.html',

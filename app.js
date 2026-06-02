@@ -256,6 +256,8 @@
   const DEFAULT_FILTERS = {
     days: [],            // ['thu']
     blocks: [],          // ['evening']
+    startH: null,        // 14   (decimal hour, e.g. 14.5 === 14:30)
+    endH: null,          // 17
     ageMin: 14, ageMax: 30,
     minExp: 0,
     maxRate: 100,
@@ -264,12 +266,23 @@
   let filters = { ...DEFAULT_FILTERS };
 
   function filterSitters(all) {
+    const hoursSet = filters.startH != null && filters.endH != null && filters.endH > filters.startH;
+
     return all
       .filter((s) => {
         if (s.age < filters.ageMin || s.age > filters.ageMax) return false;
         if (s.experienceYears < filters.minExp) return false;
         if (s.hourlyRate > filters.maxRate) return false;
-        if (filters.days.length && filters.blocks.length) {
+
+        // Hour-range filter — most precise. Sitter must have a continuous window
+        // covering [startH, endH] on at least one of the chosen days (or any day).
+        if (hoursSet) {
+          const targetDays = filters.days.length ? filters.days : DAYS.map((d) => d.id);
+          const ok = targetDays.some((dId) =>
+            rangeFits(filters.startH, filters.endH, availableHourRanges(s, dId)),
+          );
+          if (!ok) return false;
+        } else if (filters.days.length && filters.blocks.length) {
           // Match if ANY selected day has ANY selected block available.
           const ok = filters.days.some((d) =>
             filters.blocks.some((b) => isAvailable(s, d, b)),
@@ -289,6 +302,7 @@
     let n = 0;
     if (filters.days.length) n++;
     if (filters.blocks.length) n++;
+    if (filters.startH != null && filters.endH != null) n++;
     if (filters.ageMin !== DEFAULT_FILTERS.ageMin || filters.ageMax !== DEFAULT_FILTERS.ageMax) n++;
     if (filters.minExp !== DEFAULT_FILTERS.minExp) n++;
     if (filters.maxRate !== DEFAULT_FILTERS.maxRate) n++;
@@ -354,6 +368,18 @@
               (b) => `<button class="chip ${filters.blocks.includes(b.id) ? 'active' : ''}" data-block="${b.id}">${b.label}<br><span class="small muted">${b.range}</span></button>`,
             ).join('')}
           </div>
+          <div class="or-divider"><span>או טווח שעות מדויק</span></div>
+          <div class="row-2 hours-row">
+            <label class="hour-input">
+              <span class="muted small">משעה</span>
+              <input type="time" id="filterStartH" value="${filters.startH != null ? fmtH(filters.startH) : ''}" step="900" placeholder="--:--" />
+            </label>
+            <label class="hour-input">
+              <span class="muted small">עד שעה</span>
+              <input type="time" id="filterEndH" value="${filters.endH != null ? fmtH(filters.endH) : ''}" step="900" placeholder="--:--" />
+            </label>
+          </div>
+          <div class="muted small mt-8">דוגמה: 14:00 עד 17:00 — נציג רק בייביסיטרים פנויים בדיוק בטווח הזה.</div>
         </div>
         <div class="filter-group">
           <div class="filter-label">גיל הבייביסיטר</div>
@@ -435,6 +461,14 @@
       filters.ageMax  = Number($('#ageMax', root).value)  || DEFAULT_FILTERS.ageMax;
       filters.minExp  = Number($('#minExp', root).value)  || 0;
       filters.maxRate = Number($('#maxRate', root).value) || DEFAULT_FILTERS.maxRate;
+      const sH = parseH($('#filterStartH', root).value);
+      const eH = parseH($('#filterEndH', root).value);
+      filters.startH = Number.isFinite(sH) ? sH : null;
+      filters.endH   = Number.isFinite(eH) ? eH : null;
+      if (filters.startH != null && filters.endH != null && filters.endH <= filters.startH) {
+        toast('שעת הסיום חייבת להיות אחרי שעת ההתחלה');
+        return;
+      }
       filters.open = false;
       render();
       toast('הסינון הוחל');
